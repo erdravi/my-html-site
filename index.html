@@ -5,69 +5,94 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Grocery List App</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f4f4f4; }
-    header { background: #333; color: #fff; padding: 10px 20px; text-align: center; }
-    nav { display: flex; background: #ddd; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background-color: #4A90E2;
+      color: white;
+      padding: 10px;
+      text-align: center;
+    }
+    nav {
+      display: flex;
+      justify-content: space-around;
+      background-color: #f1f1f1;
+    }
     nav button {
       flex: 1;
       padding: 10px;
       border: none;
-      background: #ccc;
-      font-size: 16px;
+      background-color: #ddd;
       cursor: pointer;
+      font-size: 16px;
     }
-    nav button.active { background: #aaa; font-weight: bold; }
-    .tab-content { display: none; padding: 20px; }
-    .tab-content.active { display: block; }
+    nav button.active {
+      background-color: #4A90E2;
+      color: white;
+    }
+    .tab {
+      display: none;
+      padding: 20px;
+    }
+    .tab.active {
+      display: block;
+    }
     input, select, button {
-      padding: 8px;
       margin: 5px;
-      font-size: 16px;
-    }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
-      text-align: left;
-    }
-    .delete-btn, .check-btn {
-      padding: 4px 8px;
+      padding: 5px;
       font-size: 14px;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      margin: 5px 0;
+    }
+    .checked {
+      text-decoration: line-through;
+      color: gray;
+    }
+    .delete-btn {
+      margin-left: 10px;
+      color: red;
       cursor: pointer;
     }
-    .purchased { text-decoration: line-through; color: green; }
-    @media (max-width: 600px) {
-      input, select, button { width: 100%; box-sizing: border-box; }
+    .summary {
+      margin-top: 10px;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>Grocery List App</h1>
+    <h1>Grocery List Manager</h1>
   </header>
+
   <nav>
     <button onclick="showTab('master')" class="active">Master</button>
     <button onclick="showTab('buy')">Buy List</button>
     <button onclick="showTab('checklist')">Checklist</button>
   </nav>
 
-  <div id="master" class="tab-content active">
+  <div id="master" class="tab active">
     <h2>Master Items</h2>
-    <input id="masterInput" type="text" placeholder="Add new item" onkeyup="handleMasterInput()" />
+    <input type="text" id="masterItem" placeholder="Enter item" />
     <button onclick="addMasterItem()">Add</button>
-    <table>
-      <thead><tr><th>#</th><th>Item</th><th>Delete</th></tr></thead>
-      <tbody id="masterList"></tbody>
-    </table>
-    <p>Total: <span id="masterCount">0</span></p>
+    <ul id="masterList"></ul>
+    <div class="summary">Total items: <span id="masterCount">0</span></div>
   </div>
 
-  <div id="buy" class="tab-content">
+  <div id="buy" class="tab">
     <h2>Buy List</h2>
-    <input id="buyInput" type="text" placeholder="Item name" oninput="suggestItems()" list="suggestions"/>
-    <datalist id="suggestions"></datalist>
-    <input id="quantityInput" type="text" placeholder="Quantity" />
-    <select id="unitInput">
+    <select id="buyItem">
+      <option value="">Select item</option>
+    </select>
+    <input type="number" id="buyQuantity" placeholder="Quantity" />
+    <select id="buyUnit">
       <option value="gram">gram</option>
       <option value="kg">kg</option>
       <option value="small pack">small pack</option>
@@ -76,152 +101,163 @@
       <option value="liters">liters</option>
       <option value="item">item</option>
     </select>
-    <button onclick="addBuyItem()">Add</button>
-    <table>
-      <thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Unit</th><th>Date</th><th>Delete</th></tr></thead>
-      <tbody id="buyList"></tbody>
-    </table>
-    <p>Total: <span id="buyCount">0</span></p>
+    <input type="month" id="buyMonth" />
+    <button onclick="addToBuyList()">Add</button>
+    <ul id="buyList"></ul>
+    <div class="summary">Total buy items: <span id="buyCount">0</span></div>
   </div>
 
-  <div id="checklist" class="tab-content">
+  <div id="checklist" class="tab">
     <h2>Checklist</h2>
-    <select id="monthFilter" onchange="populateChecklist()"></select>
-    <table>
-      <thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Unit</th><th>Date</th><th>Status</th></tr></thead>
-      <tbody id="checklistTable"></tbody>
-    </table>
-    <p>✅ Purchased: <span id="purchasedCount">0</span> | ❌ Pending: <span id="pendingCount">0</span></p>
+    <select id="monthSelect" onchange="filterChecklist()">
+      <option value="">All Months</option>
+    </select>
+    <ul id="checklistItems"></ul>
+    <div class="summary">
+      Purchased: <span id="purchasedCount">0</span> | Pending: <span id="pendingCount">0</span>
+    </div>
   </div>
 
   <script>
-    let master = JSON.parse(localStorage.getItem("master")) || [];
-    let buy = JSON.parse(localStorage.getItem("buy")) || [];
-    let checklist = JSON.parse(localStorage.getItem("checklist")) || [];
+    const masterList = JSON.parse(localStorage.getItem("masterList")) || [];
+    const buyList = JSON.parse(localStorage.getItem("buyList")) || [];
+    const checklist = JSON.parse(localStorage.getItem("checklist")) || [];
 
-    function showTab(tab) {
-      document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
-      document.querySelectorAll("nav button").forEach(btn => btn.classList.remove("active"));
-      document.getElementById(tab).classList.add("active");
-      document.querySelector(`nav button[onclick="showTab('${tab}')"]`).classList.add("active");
-      if (tab === 'master') loadMaster();
-      if (tab === 'buy') loadBuy();
-      if (tab === 'checklist') populateMonthDropdown();
+    function getCurrentMonth() {
+      const now = new Date();
+      return now.toISOString().slice(0, 7); // YYYY-MM
     }
 
-    function handleMasterInput() {
-      if (event.key === "Enter") addMasterItem();
+    function showTab(tabId) {
+      document.querySelectorAll(".tab").forEach(tab => tab.classList.remove("active"));
+      document.querySelectorAll("nav button").forEach(btn => btn.classList.remove("active"));
+      document.getElementById(tabId).classList.add("active");
+      event.target.classList.add("active");
+
+      if (tabId === "master") renderMasterList();
+      if (tabId === "buy") {
+        renderBuyList();
+        updateBuyDropdown();
+        document.getElementById("buyMonth").value = getCurrentMonth();
+      }
+      if (tabId === "checklist") {
+        populateMonthDropdown();
+        document.getElementById("monthSelect").value = getCurrentMonth();
+        filterChecklist();
+      }
     }
 
     function addMasterItem() {
-      const item = document.getElementById("masterInput").value.trim();
-      if (item && !master.includes(item)) {
-        master.push(item);
-        localStorage.setItem("master", JSON.stringify(master));
-        document.getElementById("masterInput").value = "";
-        loadMaster();
+      const item = document.getElementById("masterItem").value.trim();
+      if (item && !masterList.includes(item)) {
+        masterList.push(item);
+        localStorage.setItem("masterList", JSON.stringify(masterList));
+        document.getElementById("masterItem").value = "";
+        renderMasterList();
       }
     }
 
-    function loadMaster() {
-      const list = document.getElementById("masterList");
-      list.innerHTML = master.map((item, i) =>
-        `<tr><td>${i+1}</td><td>${item}</td><td><button class="delete-btn" onclick="deleteMaster(${i})">❌</button></td></tr>`
-      ).join("");
-      document.getElementById("masterCount").innerText = master.length;
+    function deleteMasterItem(index) {
+      masterList.splice(index, 1);
+      localStorage.setItem("masterList", JSON.stringify(masterList));
+      renderMasterList();
     }
 
-    function deleteMaster(i) {
-      master.splice(i, 1);
-      localStorage.setItem("master", JSON.stringify(master));
-      loadMaster();
+    function renderMasterList() {
+      const ul = document.getElementById("masterList");
+      ul.innerHTML = "";
+      masterList.forEach((item, i) => {
+        ul.innerHTML += `<li>${i + 1}. ${item} <span class="delete-btn" onclick="deleteMasterItem(${i})">🗑️</span></li>`;
+      });
+      document.getElementById("masterCount").innerText = masterList.length;
     }
 
-    function suggestItems() {
-      const input = document.getElementById("buyInput").value.toLowerCase();
-      const list = document.getElementById("suggestions");
-      list.innerHTML = master
-        .filter(item => item.toLowerCase().includes(input))
-        .map(item => `<option value="${item}">`).join("");
+    function updateBuyDropdown() {
+      const dropdown = document.getElementById("buyItem");
+      dropdown.innerHTML = `<option value="">Select item</option>`;
+      masterList.forEach(item => {
+        const opt = document.createElement("option");
+        opt.value = item;
+        opt.textContent = item;
+        dropdown.appendChild(opt);
+      });
     }
 
-    function addBuyItem() {
-      const name = document.getElementById("buyInput").value.trim();
-      const qty = document.getElementById("quantityInput").value.trim();
-      const unit = document.getElementById("unitInput").value;
-      if (name && qty) {
-        const item = {
-          name, qty, unit,
-          date: new Date().toISOString().split("T")[0],
-          purchased: false
-        };
-        buy.push(item);
-        checklist.push(item);
-        localStorage.setItem("buy", JSON.stringify(buy));
-        localStorage.setItem("checklist", JSON.stringify(checklist));
-        document.getElementById("buyInput").value = "";
-        document.getElementById("quantityInput").value = "";
-        loadBuy();
+    function addToBuyList() {
+      const item = document.getElementById("buyItem").value;
+      const quantity = document.getElementById("buyQuantity").value;
+      const unit = document.getElementById("buyUnit").value;
+      const date = document.getElementById("buyMonth").value;
+
+      if (item && quantity && unit && date) {
+        buyList.push({ item, quantity, unit, date });
+        localStorage.setItem("buyList", JSON.stringify(buyList));
+        renderBuyList();
+        updateChecklistData();
       }
     }
 
-    function loadBuy() {
-      const list = document.getElementById("buyList");
-      list.innerHTML = buy.map((item, i) =>
-        `<tr><td>${i+1}</td><td>${item.name}</td><td>${item.qty}</td><td>${item.unit}</td><td>${item.date}</td>
-         <td><button class="delete-btn" onclick="deleteBuy(${i})">❌</button></td></tr>`
-      ).join("");
-      document.getElementById("buyCount").innerText = buy.length;
+    function deleteBuyItem(index) {
+      buyList.splice(index, 1);
+      localStorage.setItem("buyList", JSON.stringify(buyList));
+      renderBuyList();
+      updateChecklistData();
     }
 
-    function deleteBuy(i) {
-      buy.splice(i, 1);
-      localStorage.setItem("buy", JSON.stringify(buy));
-      loadBuy();
+    function renderBuyList() {
+      const ul = document.getElementById("buyList");
+      ul.innerHTML = "";
+      buyList.forEach((b, i) => {
+        ul.innerHTML += `<li>${i + 1}. ${b.item} - ${b.quantity} ${b.unit} (${b.date}) <span class="delete-btn" onclick="deleteBuyItem(${i})">🗑️</span></li>`;
+      });
+      document.getElementById("buyCount").innerText = buyList.length;
+    }
+
+    function updateChecklistData() {
+      checklist.length = 0;
+      buyList.forEach(b => checklist.push({ ...b, checked: false }));
+      localStorage.setItem("checklist", JSON.stringify(checklist));
     }
 
     function populateMonthDropdown() {
-      const select = document.getElementById("monthFilter");
-      const months = [...new Set(checklist.map(item => item.date?.slice(0, 7)))];
-      select.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join("");
-      if (months.length) {
-        select.value = months[0];
-        populateChecklist();
-      }
+      const dropdown = document.getElementById("monthSelect");
+      const months = [...new Set(checklist.map(c => c.date.slice(0, 7)))];
+      dropdown.innerHTML = `<option value="">All Months</option>`;
+      months.forEach(m => {
+        const opt = document.createElement("option");
+        opt.value = m;
+        opt.textContent = m;
+        dropdown.appendChild(opt);
+      });
     }
 
-    function populateChecklist() {
-      const selectedMonth = document.getElementById("monthFilter").value;
-      const list = document.getElementById("checklistTable");
-      const filtered = checklist.filter(item => item.date?.startsWith(selectedMonth));
+    function toggleChecked(checkbox, index) {
+      checklist[index].checked = checkbox.checked;
+      localStorage.setItem("checklist", JSON.stringify(checklist));
+      filterChecklist();
+    }
+
+    function filterChecklist() {
+      const month = document.getElementById("monthSelect").value;
+      const ul = document.getElementById("checklistItems");
+      const filtered = month ? checklist.filter(c => c.date.startsWith(month)) : checklist;
+
+      ul.innerHTML = "";
       let purchased = 0;
-      list.innerHTML = filtered.map((item, i) => {
-        const isPurchased = item.purchased;
-        if (isPurchased) purchased++;
-        return `<tr class="${isPurchased ? 'purchased' : ''}">
-          <td>${i+1}</td><td>${item.name}</td><td>${item.qty}</td><td>${item.unit}</td><td>${item.date}</td>
-          <td><input type="checkbox" onchange="togglePurchased(${i}, '${selectedMonth}')" ${isPurchased ? 'checked' : ''}></td>
-        </tr>`;
-      }).join("");
+      filtered.forEach((c, i) => {
+        if (c.checked) purchased++;
+        ul.innerHTML += `<li><input type="checkbox" onchange="toggleChecked(this, ${i})" ${c.checked ? "checked" : ""} />
+        <span class="${c.checked ? 'checked' : ''}">${c.item} - ${c.quantity} ${c.unit} (${c.date})</span></li>`;
+      });
       document.getElementById("purchasedCount").innerText = purchased;
       document.getElementById("pendingCount").innerText = filtered.length - purchased;
     }
 
-    function togglePurchased(index, month) {
-      const filtered = checklist.filter(item => item.date?.startsWith(month));
-      const item = filtered[index];
-      const fullIndex = checklist.findIndex(i =>
-        i.name === item.name && i.date === item.date && i.qty === item.qty
-      );
-      if (fullIndex !== -1) {
-        checklist[fullIndex].purchased = !checklist[fullIndex].purchased;
-        localStorage.setItem("checklist", JSON.stringify(checklist));
-        populateChecklist();
-      }
-    }
-
-    // Load Master on startup
-    loadMaster();
+    // Initialize
+    renderMasterList();
+    renderBuyList();
+    populateMonthDropdown();
+    filterChecklist();
   </script>
 </body>
 </html>
