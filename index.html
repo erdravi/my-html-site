@@ -247,7 +247,7 @@
       filtered.forEach((c, i) => {
         if (c.checked) purchased++;
         ul.innerHTML += `<li><input type="checkbox" onchange="toggleChecked(this, ${i})" ${c.checked ? "checked" : ""} />
-        <span class="${c.checked ? 'checked' : ''}">${c.item} - ${c.quantity} ${c.unit} (${c.date})</span></li>`;
+        <span class="${c.checked ? 'checked' : ''}">${c.item} - ${c.quantity} ${c.unit}</span></li>`;
       });
       document.getElementById("purchasedCount").innerText = purchased;
       document.getElementById("pendingCount").innerText = filtered.length - purchased;
@@ -261,3 +261,4 @@
   </script>
 </body>
 </html>
+
