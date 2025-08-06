@@ -208,7 +208,7 @@
       const ul = document.getElementById("buyList");
       ul.innerHTML = "";
       buyList.forEach((b, i) => {
-        ul.innerHTML += `<li>${i + 1}. ${b.item} - ${b.quantity} ${b.unit} (${b.date}) <span class="delete-btn" onclick="deleteBuyItem(${i})">🗑️</span></li>`;
+        ul.innerHTML += `<li>${i + 1}. ${b.item} - ${b.quantity} ${b.unit} <span class="delete-btn" onclick="deleteBuyItem(${i})">🗑️</span></li>`;
       });
       document.getElementById("buyCount").innerText = buyList.length;
     }
@@ -261,4 +261,5 @@
   </script>
 </body>
 </html>
+
 
