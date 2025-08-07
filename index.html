@@ -4,11 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Grocery List App</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 0;
       padding: 0;
+      background-color: white;
+      color: black;
+    }
+    body.dark {
+      background-color: #121212;
+      color: white;
     }
     header {
       background-color: #4A90E2;
@@ -40,7 +47,7 @@
     .tab.active {
       display: block;
     }
-    input, select, button {
+    input, select, button, textarea {
       margin: 5px;
       padding: 5px;
       font-size: 14px;
@@ -56,26 +63,37 @@
       text-decoration: line-through;
       color: gray;
     }
-    .delete-btn {
+    .delete-btn, .edit-btn {
       margin-left: 10px;
-      color: red;
       cursor: pointer;
+    }
+    .delete-btn {
+      color: red;
+    }
+    .edit-btn {
+      color: orange;
     }
     .summary {
       margin-top: 10px;
       font-weight: bold;
+    }
+    .dark-toggle {
+      position: absolute;
+      top: 10px;
+      right: 10px;
     }
   </style>
 </head>
 <body>
   <header>
     <h1>Grocery List Manager</h1>
+    <button class="dark-toggle" onclick="toggleDarkMode()">🌙</button>
   </header>
-
   <nav>
-    <button onclick="showTab('master')" class="active">Master</button>
-    <button onclick="showTab('buy')">Buy List</button>
-    <button onclick="showTab('checklist')">Checklist</button>
+    <button onclick="showTab('master', this)" class="active">Master</button>
+    <button onclick="showTab('buy', this)">Buy List</button>
+    <button onclick="showTab('checklist', this)">Checklist</button>
+    <button onclick="showTab('backup', this)">Backup</button>
   </nav>
 
   <div id="master" class="tab active">
@@ -88,9 +106,7 @@
 
   <div id="buy" class="tab">
     <h2>Buy List</h2>
-    <select id="buyItem">
-      <option value="">Select item</option>
-    </select>
+    <select id="buyItem"></select>
     <input type="number" id="buyQuantity" placeholder="Quantity" />
     <select id="buyUnit">
       <option value="gram">gram</option>
@@ -105,6 +121,8 @@
     <button onclick="addToBuyList()">Add</button>
     <ul id="buyList"></ul>
     <div class="summary">Total buy items: <span id="buyCount">0</span></div>
+    <button onclick="sortBuyList()">Sort by Item</button>
+    <button onclick="exportBuyList()">Export CSV</button>
   </div>
 
   <div id="checklist" class="tab">
@@ -113,28 +131,31 @@
       <option value="">All Months</option>
     </select>
     <ul id="checklistItems"></ul>
-    <div class="summary">
-      Purchased: <span id="purchasedCount">0</span> | Pending: <span id="pendingCount">0</span>
-    </div>
+    <div class="summary">Purchased: <span id="purchasedCount">0</span> | Pending: <span id="pendingCount">0</span></div>
+  </div>
+
+  <div id="backup" class="tab">
+    <h2>Backup / Restore</h2>
+    <button onclick="backupData()">Download Backup</button>
+    <input type="file" id="fileInput" onchange="restoreData()" />
   </div>
 
   <script>
     const masterList = JSON.parse(localStorage.getItem("masterList")) || [];
     const buyList = JSON.parse(localStorage.getItem("buyList")) || [];
     const checklist = JSON.parse(localStorage.getItem("checklist")) || [];
+    let editIndex = -1;
 
     function getCurrentMonth() {
-      const now = new Date();
-      return now.toISOString().slice(0, 7); // YYYY-MM
+      return new Date().toISOString().slice(0, 7);
     }
 
-    function showTab(tabId) {
+    function showTab(tabId, el = null) {
       document.querySelectorAll(".tab").forEach(tab => tab.classList.remove("active"));
       document.querySelectorAll("nav button").forEach(btn => btn.classList.remove("active"));
       document.getElementById(tabId).classList.add("active");
-      event.target.classList.add("active");
+      if (el) el.classList.add("active");
 
-      if (tabId === "master") renderMasterList();
       if (tabId === "buy") {
         renderBuyList();
         updateBuyDropdown();
@@ -142,9 +163,9 @@
       }
       if (tabId === "checklist") {
         populateMonthDropdown();
-        document.getElementById("monthSelect").value = getCurrentMonth();
         filterChecklist();
       }
+      if (tabId === "master") renderMasterList();
     }
 
     function addMasterItem() {
@@ -157,12 +178,6 @@
       }
     }
 
-    function deleteMasterItem(index) {
-      masterList.splice(index, 1);
-      localStorage.setItem("masterList", JSON.stringify(masterList));
-      renderMasterList();
-    }
-
     function renderMasterList() {
       const ul = document.getElementById("masterList");
       ul.innerHTML = "";
@@ -170,6 +185,12 @@
         ul.innerHTML += `<li>${i + 1}. ${item} <span class="delete-btn" onclick="deleteMasterItem(${i})">🗑️</span></li>`;
       });
       document.getElementById("masterCount").innerText = masterList.length;
+    }
+
+    function deleteMasterItem(index) {
+      masterList.splice(index, 1);
+      localStorage.setItem("masterList", JSON.stringify(masterList));
+      renderMasterList();
     }
 
     function updateBuyDropdown() {
@@ -190,38 +211,67 @@
       const date = document.getElementById("buyMonth").value;
 
       if (item && quantity && unit && date) {
-        buyList.push({ item, quantity, unit, date });
+        const duplicate = buyList.find(b => b.item === item && b.date === date);
+        if (duplicate && editIndex === -1) {
+          alert("Duplicate item for the same month already exists.");
+          return;
+        }
+
+        if (editIndex >= 0) {
+          buyList[editIndex] = { item, quantity, unit, date };
+          editIndex = -1;
+        } else {
+          buyList.push({ item, quantity, unit, date });
+        }
+
         localStorage.setItem("buyList", JSON.stringify(buyList));
+        syncChecklist();
         renderBuyList();
-        updateChecklistData();
+        document.getElementById("buyItem").value = "";
+        document.getElementById("buyQuantity").value = "";
       }
     }
 
+    function editBuyItem(index) {
+      const b = buyList[index];
+      document.getElementById("buyItem").value = b.item;
+      document.getElementById("buyQuantity").value = b.quantity;
+      document.getElementById("buyUnit").value = b.unit;
+      document.getElementById("buyMonth").value = b.date;
+      editIndex = index;
+    }
+
     function deleteBuyItem(index) {
-      buyList.splice(index, 1);
+      const removed = buyList.splice(index, 1)[0];
+      const cIndex = checklist.findIndex(c => c.item === removed.item && c.date === removed.date);
+      if (cIndex >= 0) checklist.splice(cIndex, 1);
       localStorage.setItem("buyList", JSON.stringify(buyList));
+      localStorage.setItem("checklist", JSON.stringify(checklist));
       renderBuyList();
-      updateChecklistData();
     }
 
     function renderBuyList() {
       const ul = document.getElementById("buyList");
       ul.innerHTML = "";
       buyList.forEach((b, i) => {
-        ul.innerHTML += `<li>${i + 1}. ${b.item} - ${b.quantity} ${b.unit} <span class="delete-btn" onclick="deleteBuyItem(${i})">🗑️</span></li>`;
+        ul.innerHTML += `<li>${i + 1}. ${b.item} - ${b.quantity} ${b.unit}  
+        <span class="edit-btn" onclick="editBuyItem(${i})">✏️</span>
+        <span class="delete-btn" onclick="deleteBuyItem(${i})">🗑️</span></li>`;
       });
       document.getElementById("buyCount").innerText = buyList.length;
     }
 
-    function updateChecklistData() {
-      checklist.length = 0;
-      buyList.forEach(b => checklist.push({ ...b, checked: false }));
+    function syncChecklist() {
+      buyList.forEach(b => {
+        const exists = checklist.find(c => c.item === b.item && c.date === b.date);
+        if (!exists) checklist.push({ ...b, checked: false });
+      });
       localStorage.setItem("checklist", JSON.stringify(checklist));
     }
 
     function populateMonthDropdown() {
       const dropdown = document.getElementById("monthSelect");
-      const months = [...new Set(checklist.map(c => c.date.slice(0, 7)))];
+      const months = [...new Set(checklist.map(c => c.date))];
       dropdown.innerHTML = `<option value="">All Months</option>`;
       months.forEach(m => {
         const opt = document.createElement("option");
@@ -231,35 +281,80 @@
       });
     }
 
-    function toggleChecked(checkbox, index) {
-      checklist[index].checked = checkbox.checked;
-      localStorage.setItem("checklist", JSON.stringify(checklist));
-      filterChecklist();
-    }
-
     function filterChecklist() {
       const month = document.getElementById("monthSelect").value;
       const ul = document.getElementById("checklistItems");
-      const filtered = month ? checklist.filter(c => c.date.startsWith(month)) : checklist;
-
+      const filtered = month ? checklist.filter(c => c.date === month) : checklist;
       ul.innerHTML = "";
       let purchased = 0;
-      filtered.forEach((c, i) => {
+      filtered.forEach((c) => {
         if (c.checked) purchased++;
-        ul.innerHTML += `<li><input type="checkbox" onchange="toggleChecked(this, ${i})" ${c.checked ? "checked" : ""} />
+        ul.innerHTML += `<li><input type="checkbox" onchange="toggleChecked(this, '${c.item}', '${c.date}')" ${c.checked ? "checked" : ""} />
         <span class="${c.checked ? 'checked' : ''}">${c.item} - ${c.quantity} ${c.unit}</span></li>`;
       });
       document.getElementById("purchasedCount").innerText = purchased;
       document.getElementById("pendingCount").innerText = filtered.length - purchased;
     }
 
+    function toggleChecked(checkbox, item, date) {
+      const index = checklist.findIndex(c => c.item === item && c.date === date);
+      if (index >= 0) {
+        checklist[index].checked = checkbox.checked;
+        localStorage.setItem("checklist", JSON.stringify(checklist));
+        filterChecklist();
+      }
+    }
+
+    function exportBuyList() {
+      let csv = "Item,Quantity,Unit,Date\n";
+      buyList.forEach(b => csv += `${b.item},${b.quantity},${b.unit},${b.date}\n`);
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "buy_list.csv";
+      a.click();
+    }
+
+    function backupData() {
+      const data = { masterList, buyList, checklist };
+      const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "grocery_backup.json";
+      a.click();
+    }
+
+    function restoreData() {
+      const file = document.getElementById("fileInput").files[0];
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const data = JSON.parse(e.target.result);
+        localStorage.setItem("masterList", JSON.stringify(data.masterList));
+        localStorage.setItem("buyList", JSON.stringify(data.buyList));
+        localStorage.setItem("checklist", JSON.stringify(data.checklist));
+        location.reload();
+      };
+      reader.readAsText(file);
+    }
+
+    function sortBuyList() {
+      buyList.sort((a, b) => a.item.localeCompare(b.item));
+      localStorage.setItem("buyList", JSON.stringify(buyList));
+      renderBuyList();
+    }
+
+    function toggleDarkMode() {
+      document.body.classList.toggle("dark");
+    }
+
     // Initialize
     renderMasterList();
     renderBuyList();
+    syncChecklist();
     populateMonthDropdown();
     filterChecklist();
   </script>
 </body>
 </html>
-
-
